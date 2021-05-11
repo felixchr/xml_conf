@@ -1,12 +1,9 @@
 # coding: utf-8
 
-from os import stat
 import re
-import tempfile
 import logging
 from collections import OrderedDict
 from copy import copy
-# from typing import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +13,25 @@ except ImportError:
     import xml.etree.ElementTree as ET
 
 from lxml import etree
-from .base_conf import uniq_seq_merge
+
+def uniq_seq_merge(seq1, seq2):
+    new_seq = copy(seq1)
+    items_only_in_seq2 = set(seq2) - set(new_seq)
+    len2 = len(seq2)
+    for item in items_only_in_seq2:
+        i2 = seq2.index(item)
+        if i2 == len2 - 1:
+            new_seq.append(item)
+        else:
+            for i in range(i2 + 1, len2):
+                key = seq2[i]
+                if key in new_seq:
+                    new_seq.insert(new_seq.index(key), item)
+                    break
+            else:
+                new_seq.append(item)
+    return new_seq
+
 class XmlConfig:
     '''
         using lxml to process xml format file
