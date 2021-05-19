@@ -32,6 +32,56 @@ def uniq_seq_merge(seq1, seq2):
                 new_seq.append(item)
     return new_seq
 
+def xpath_add_default_ns(xpath, def_ns='__default__'):
+    '''
+        Add a default ns tag. This is because lxml doesn't support empty namespace
+    '''
+    def find_brackets(xpath):
+        ret = []
+        stack = []
+        p = re.compile(r'([\[\]])')
+        for e in p.finditer(xpath):
+            string = e.group()
+            index = e.start()
+            if string == '[':
+                stack.append(index)
+            else:
+                ret.append((stack[-1], index))
+                stack.pop(-1)
+        return ret
+    def in_brackets(index, brackets):
+        if not brackets:
+            return False
+        for start, end in brackets:
+            if start < index < end:
+                return True
+        return False
+
+    ret = []
+    p = re.compile(r'/([^\[\]/\'\"]+)')
+    last_end = 0
+    brackets = find_brackets(xpath)
+    for match in p.finditer(xpath):
+        string = match.group()
+        start = match.start()
+        end = match.end()
+        if in_brackets(start, brackets):
+            ret.append(xpath[last_end:end])
+            last_end = end
+        else:
+            # is a real node tag
+            if ':' in string:
+                # has a name space in name
+                ret.append(xpath[last_end:end])
+                last_end = end
+            else:
+                ret.append(xpath[last_end:start])
+                ret.append('/' + def_ns + ':' + string[1:])
+                last_end = end
+    if end < len(xpath) - 1:
+        ret.append(xpath[last_end:])
+    return ''.join(ret)
+
 class XmlConfig:
     '''
         using lxml to process xml format file
@@ -50,13 +100,16 @@ class XmlConfig:
         self._node_map = {}
         self._get_node_list()
 
-    def search(self, xpath):
-        # search node which matches xpath
+    def search(self, xpath, name_def_ns='__default__'):
+        '''search node which matches xpath'''
         if self._nsmap_r:
-            nm = copy(self.root.nsmap)
-            if None in nm:
-                nm.pop(None)
-            return self.etree.xpath(xpath, namespaces=nm)
+            # the file is with namespaces defined
+            nsmap = copy(self.root.nsmap)
+            if None in nsmap:
+                nsmap[name_def_ns] = nsmap[None]
+                nsmap.pop(None)
+                xpath = xpath_add_default_ns(xpath, name_def_ns)
+            return self.etree.xpath(xpath, namespaces=nsmap)
         return self.etree.xpath(xpath)
 
     def _rm_prefix(self, tag: str):
